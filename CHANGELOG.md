@@ -5,6 +5,9 @@ All notable changes to **chaturbate-record** are listed here. The format is base
 
 ## [0.5.0] - 2026-11-15
 
+### Changed
+- App icon. The placeholder profile avatar is replaced by a record ring in the app's own orange, across the macOS `.icns`, the Windows `.ico` and Store logos, the tray and window icon, and the site favicon, header mark and Apple touch icon (`docs/mark.svg` is the source).
+
 ### Added
 - Tauri 2 + Rust desktop app for macOS, Windows and Linux, replacing the
   Python Playwright recorder. React frontend with Record, Library, Convert and
