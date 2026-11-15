@@ -1,0 +1,27 @@
+# Rust
+target/
+**/*.rs.bk
+
+# Node / Tauri
+node_modules/
+app/dist/
+app/src-tauri/gen/
+
+# Recordings (never commit captured streams)
+output/
+*.webm
+*.mp4
+*.mov
+
+# Local release artifacts
+.release-*/
+.release-publish.lock
+dist/
+
+# OS / editor
+.DS_Store
+Thumbs.db
+*.log
+.env
+.idea/
+.vscode/

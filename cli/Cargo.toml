@@ -1,0 +1,20 @@
+[package]
+name = "chaturbate-recorder-cli"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+description = "Headless Chaturbate recorder CLI"
+
+[[bin]]
+name = "chaturbate-recorder"
+path = "src/main.rs"
+
+[dependencies]
+chaturbate-core = { path = "../core" }
+clap = { version = "4", features = ["derive"] }
+ctrlc = "3"
+tracing.workspace = true
+tracing-subscriber.workspace = true
+serde_json.workspace = true
