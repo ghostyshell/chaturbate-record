@@ -24,8 +24,13 @@ pub fn is_allowed_media_host(url: &str) -> bool {
     let Some(rest) = url.strip_prefix("https://") else {
         return false;
     };
-    let host = rest.split(['/', '?']).next().unwrap_or("");
-    let host = host.split(':').next().unwrap_or("");
+    let authority = rest.split(['/', '?']).next().unwrap_or("");
+    // `https://mmcdn.com@evil.example/` would otherwise read as mmcdn.
+    if authority.contains('@') {
+        return false;
+    }
+    let host = authority.rsplit(':').next().unwrap_or(authority);
+    let host = authority.split(':').next().unwrap_or(host);
     host == "mmcdn.com" || host.ends_with(".mmcdn.com")
 }
 
@@ -37,8 +42,11 @@ pub struct Http {
 }
 
 fn new_agent(proxy: &str) -> Result<ureq::Agent> {
+    // No redirects: a 302 must not carry the request to a host the allow-list
+    // never checked.
     let mut builder = ureq::AgentBuilder::new()
         .timeout(std::time::Duration::from_secs(30))
+        .redirects(0)
         .user_agent(USER_AGENT);
     let configured = proxy.trim();
     if !configured.is_empty() {
@@ -83,6 +91,7 @@ impl Http {
             api: Mutex::new(new_agent(&config.proxy)?),
             direct: ureq::AgentBuilder::new()
                 .timeout(std::time::Duration::from_secs(30))
+                .redirects(0)
                 .user_agent(USER_AGENT)
                 .build(),
             warmed: AtomicBool::new(false),
@@ -202,15 +211,19 @@ pub fn fetch_context(http: &Http, username: &str) -> Result<Context> {
             Ok(body) => {
                 if let Ok(ctx) = serde_json::from_str::<Context>(&body) {
                     if ctx.code.as_deref() == Some("age-gate-required") {
-                        return Err(Error::Offline(
+                        // The gate follows the exit country: a fresh circuit is
+                        // the fix, so try one before reporting it.
+                        last = Error::Offline(
                             "Chaturbate age-gates this region. Set a proxy in Settings \
                              (a local Tor works) so the lookup leaves from elsewhere."
                                 .into(),
-                        ));
+                        );
+                    } else {
+                        return Ok(ctx);
                     }
-                    return Ok(ctx);
+                } else {
+                    last = Error::Offline(format!("{username}: the site served HTML, not JSON"));
                 }
-                last = Error::Offline(format!("{username}: the site served HTML, not JSON"));
             }
             Err(e) => last = e,
         }
@@ -234,25 +247,17 @@ pub struct Master {
     pub base: String,
 }
 
-fn absolutize(base: &str, path: &str) -> String {
-    if path.starts_with("https://") {
-        return path.to_string();
-    }
-    let scheme_host = base.split('/').take(3).collect::<Vec<_>>().join("/");
-    if path.starts_with('/') {
-        format!("{scheme_host}{path}")
-    } else {
-        format!("{scheme_host}/{path}")
-    }
-}
-
 /// Parse the master playlist. Audio is a separate rendition group, so both
 /// tracks are needed for a complete recording.
 pub fn parse_master(master_url: &str, text: &str) -> Master {
     let variants = hls::parse_master_playlist(master_url, text);
     let mut audio = Vec::new();
     for line in text.lines().map(str::trim) {
-        if !line.starts_with("#EXT-X-MEDIA:TYPE=AUDIO") {
+        if !line.starts_with("#EXT-X-MEDIA:") {
+            continue;
+        }
+        // Attribute order is arbitrary, so look for TYPE and URI by name.
+        if !line.contains("TYPE=AUDIO") {
             continue;
         }
         if let Some(uri) = line
@@ -261,7 +266,7 @@ pub fn parse_master(master_url: &str, text: &str) -> Master {
             .and_then(|rest| rest.split('"').next())
         {
             audio.push(Rendition {
-                url: absolutize(master_url, uri),
+                url: hls::resolve(master_url, uri),
             });
         }
     }
@@ -299,13 +304,19 @@ pub fn open(http: &Http, username: &str, quality: &str) -> Result<Session> {
     if master.variants.is_empty() {
         return Err(Error::Other("the master playlist listed no variants".into()));
     }
-    let variant = if quality.is_empty() || quality == "source" || quality == "auto" {
+    let wanted = quality.trim();
+    let variant = if wanted.is_empty() || wanted == "source" || wanted == "auto" {
         hls::best_variant(&master.variants)
     } else {
         master
             .variants
             .iter()
-            .find(|v| v.name.as_deref() == Some(quality))
+            .find(|v| {
+                v.name.as_deref() == Some(wanted)
+                    || v.resolution
+                        .map(|(w, h)| format!("{w}x{h}") == wanted)
+                        .unwrap_or(false)
+            })
             .or_else(|| hls::best_variant(&master.variants))
     }
     .cloned()

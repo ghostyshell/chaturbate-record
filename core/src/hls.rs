@@ -35,7 +35,7 @@ pub struct Variant {
 }
 
 /// Resolve `uri` against the playlist URL it was read from.
-fn resolve(base: &str, uri: &str) -> String {
+pub fn resolve(base: &str, uri: &str) -> String {
     if uri.starts_with("http://") || uri.starts_with("https://") {
         return uri.to_string();
     }
@@ -215,7 +215,7 @@ mod real_master {
     use super::*;
     #[test]
     fn parses_a_real_chaturbate_master() {
-        let text = "#EXTM3U\n#EXT-X-VERSION:6\n#EXT-X-STREAM-INF:BANDWIDTH=2989465,CODECS=\"avc1.4d0029,mp4a.40.2\",RESOLUTION=1280x720,FRAME-RATE=29.000,CLOSED-CAPTIONS=NONE,NAME=\"source\"\nhttps://media-hls.doppiocdn.com/b-hls-20/288906106/288906106.m3u8?playlistType=standard&psch=v2&pkey=Ook7quaiNgiyuhai&preferredVideoCodec=h264\n#EXT-X-STREAM-INF:BANDWIDTH=693862,CODECS=\"avc1.4d0015,mp4a.40.2\",RESOLUTION=426x240,FRAME-RATE=26.000,CLOSED-CAPTIONS=NONE,NAME=\"240p\"\nhttps://media-hls.doppiocdn.com/b-hls-20/288906106/288906106_240p.m3u8?playlistType=standard&psch=v2&pkey=Ook7quaiNgiyuhai&preferredVideoCodec=h264\n";
+        let text = "#EXTM3U\n#EXT-X-VERSION:6\n#EXT-X-STREAM-INF:BANDWIDTH=2989465,CODECS=\"avc1.4d0029,mp4a.40.2\",RESOLUTION=1280x720,FRAME-RATE=29.000,CLOSED-CAPTIONS=NONE,NAME=\"source\"\nhttps://edge22-rtm.live.mmcdn.com/b-hls-20/288906106/288906106.m3u8?playlistType=standard&psch=v2&pkey=Ook7quaiNgiyuhai&preferredVideoCodec=h264\n#EXT-X-STREAM-INF:BANDWIDTH=693862,CODECS=\"avc1.4d0015,mp4a.40.2\",RESOLUTION=426x240,FRAME-RATE=26.000,CLOSED-CAPTIONS=NONE,NAME=\"240p\"\nhttps://edge22-rtm.live.mmcdn.com/b-hls-20/288906106/288906106_240p.m3u8?playlistType=standard&psch=v2&pkey=Ook7quaiNgiyuhai&preferredVideoCodec=h264\n";
         let variants = parse_master_playlist("https://edge-hls.doppiocdn.com/hls/1/master/1_auto.m3u8", text);
         assert_eq!(variants.len(), 2, "{variants:?}");
     }

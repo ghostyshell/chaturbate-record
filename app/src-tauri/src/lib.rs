@@ -169,17 +169,20 @@ fn spawn_record(
             } else {
                 None
             });
-            let out = media::finalize_tracks(
+            let written = media::finalize_parts(
                 ffmpeg.as_deref(),
                 ffprobe.as_deref(),
-                &report.paths.video,
-                report.paths.audio.as_deref(),
-                &report.paths.final_path,
+                &report.paths.parts,
                 preset,
                 keep_source || config.keep_ts,
                 ctx,
             )?;
-            ctx.message(format!("saved {}", out.display()));
+            if let Some(note) = &report.note {
+                ctx.message(format!(
+                    "saved {} file(s); recording ended early: {note}",
+                    written.len()
+                ));
+            }
             Ok(())
         },
     )
@@ -195,8 +198,19 @@ fn record_start(
     convert: Option<String>,
     keep_source: Option<bool>,
 ) -> Result<u64> {
+    let model = model.trim().to_string();
+    if state
+        .jobs
+        .list()
+        .iter()
+        .any(|job| job.state == chaturbate_core::jobs::JobState::Running
+            && job.kind == "record"
+            && job.label == model)
+    {
+        return Err(Error::other(format!("{model} is already recording")));
+    }
     let opts = RecordOptions {
-        model: model.trim().to_string(),
+        model,
         quality: quality.unwrap_or_else(|| "source".into()),
         duration_secs,
         output: None,
@@ -257,8 +271,8 @@ fn library_list(state: State<'_, AppState>) -> Result<Vec<Recording>> {
 }
 
 #[tauri::command]
-fn library_delete(path: String) -> Result<()> {
-    library::delete(&PathBuf::from(path))
+fn library_delete(state: State<'_, AppState>, path: String) -> Result<()> {
+    library::delete_within(&state.config().resolved_output_dir(), &PathBuf::from(path))
 }
 
 #[tauri::command]

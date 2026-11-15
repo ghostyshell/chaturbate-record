@@ -156,9 +156,15 @@ pub fn encode(
     cancellable: bool,
     ctx: &JobContext,
 ) -> Result<()> {
+    if same_file(src, dst) {
+        return Err(Error::Other("the output would overwrite the source file".into()));
+    }
     if let Some(parent) = dst.parent() {
         std::fs::create_dir_all(parent)?;
     }
+    // Only remove what this run created: a failed re-encode must not delete a
+    // good file that was already there.
+    let existed = dst.exists();
     let mut child = Command::new(ffmpeg)
         .arg("-y")
         .arg("-i")
@@ -211,17 +217,32 @@ pub fn encode(
     let status = child.wait().map_err(|e| Error::Other(e.to_string()))?;
     let stderr_tail = errors.join().unwrap_or_default();
     if cancelled {
-        let _ = std::fs::remove_file(dst);
+        if !existed {
+            let _ = std::fs::remove_file(dst);
+        }
         return Err(Error::Cancelled(ctx.job_id()));
     }
     if !status.success() {
-        let _ = std::fs::remove_file(dst);
+        if !existed {
+            let _ = std::fs::remove_file(dst);
+        }
         return Err(Error::Other(format!(
             "ffmpeg exited with {status}: {}",
             stderr_tail.trim().lines().last().unwrap_or("no output")
         )));
     }
     Ok(())
+}
+
+/// True when both paths resolve to the same file.
+pub fn same_file(a: &Path, b: &Path) -> bool {
+    if a == b {
+        return true;
+    }
+    match (a.canonicalize(), b.canonicalize()) {
+        (Ok(a), Ok(b)) => a == b,
+        _ => false,
+    }
 }
 
 /// Strip the track role and the `.recording` marker:
@@ -276,13 +297,13 @@ pub fn mux(
     Ok(())
 }
 
-/// Turn finished tracks into the final file.
+/// Turn one finished part into its final file.
 ///
 /// With ffmpeg the two tracks are muxed by stream copy and, when a compression
 /// preset is chosen, re-encoded in one pass from that mux. Without ffmpeg the
 /// video track is renamed and the audio track is left beside it, because
 /// dropping both would lose the recording.
-pub fn finalize_tracks(
+fn finalize_part(
     ffmpeg: Option<&Path>,
     ffprobe: Option<&Path>,
     video: &Path,
@@ -292,14 +313,17 @@ pub fn finalize_tracks(
     keep_source: bool,
     ctx: &JobContext,
 ) -> Result<PathBuf> {
+    if same_file(video, final_path) {
+        return Ok(final_path.to_path_buf());
+    }
+    // A track that never received a byte is not a track: muxing it would fail
+    // and take a perfectly good video down with it.
+    let audio = audio.filter(|p| std::fs::metadata(p).map(|m| m.len() > 0).unwrap_or(false));
+
     let Some(ffmpeg) = ffmpeg else {
         std::fs::rename(video, final_path)?;
         return Ok(final_path.to_path_buf());
     };
-    let size = std::fs::metadata(video).map(|m| m.len()).unwrap_or(0);
-    if size == 0 {
-        return Err(Error::Other("nothing was recorded to finalize".into()));
-    }
     let chosen = preset(preset_id.unwrap_or("copy"));
     let total = ffprobe.and_then(|probe| duration(probe, video));
 
@@ -314,13 +338,14 @@ pub fn finalize_tracks(
             None
         }
         None => {
+            // Stream copy, never cancellable: a Stop must still produce a file.
             encode(ffmpeg, video, final_path, &["-c", "copy"], total, false, ctx)?;
             None
         }
     };
 
     if let Some(source) = muxed {
-        encode(ffmpeg, &source, final_path, chosen.args, total, chosen.id != "copy", ctx)?;
+        encode(ffmpeg, &source, final_path, chosen.args, total, false, ctx)?;
         let _ = std::fs::remove_file(&source);
     }
 
@@ -331,6 +356,58 @@ pub fn finalize_tracks(
         }
     }
     Ok(final_path.to_path_buf())
+}
+
+/// Finalize every recorded part. One failing part does not stop the rest; the
+/// error is returned after the others have been written.
+pub fn finalize_parts(
+    ffmpeg: Option<&Path>,
+    ffprobe: Option<&Path>,
+    parts: &[crate::recorder::PartPair],
+    preset_id: Option<&str>,
+    keep_source: bool,
+    ctx: &JobContext,
+) -> Result<Vec<PathBuf>> {
+    let mut written = Vec::new();
+    let mut failures: Vec<String> = Vec::new();
+    for part in parts {
+        let Some(video) = part.video.as_deref() else {
+            continue;
+        };
+        let size = std::fs::metadata(video).map(|m| m.len()).unwrap_or(0);
+        if size == 0 {
+            continue;
+        }
+        match finalize_part(
+            ffmpeg,
+            ffprobe,
+            video,
+            part.audio.as_deref(),
+            &part.final_path,
+            preset_id,
+            keep_source,
+            ctx,
+        ) {
+            Ok(path) => {
+                ctx.message(format!("saved {}", path.display()));
+                written.push(path);
+            }
+            Err(e) => {
+                failures.push(format!("{}: {e}", video.display()));
+                let _ = ctx.check_cancel();
+            }
+        }
+    }
+    if written.is_empty() {
+        if failures.is_empty() {
+            return Err(Error::Other("nothing was recorded to finalize".into()));
+        }
+        return Err(Error::Other(failures.join("; ")));
+    }
+    if !failures.is_empty() {
+        tracing::warn!("some parts failed to finalize: {}", failures.join("; "));
+    }
+    Ok(written)
 }
 
 #[cfg(test)]

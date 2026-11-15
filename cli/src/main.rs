@@ -96,8 +96,13 @@ fn main() -> std::process::ExitCode {
 fn install_ctrlc() -> Arc<AtomicBool> {
     let flag = Arc::new(AtomicBool::new(false));
     let handler_flag = flag.clone();
+    // First Ctrl+C asks the job to stop at the next segment; a second one
+    // exits immediately, because ctrlc replaces the default disposition.
     let _ = ctrlc::set_handler(move || {
-        handler_flag.store(true, Ordering::SeqCst);
+        if handler_flag.swap(true, Ordering::SeqCst) {
+            eprintln!("\n  force quit");
+            std::process::exit(130);
+        }
     });
     flag
 }
@@ -185,17 +190,15 @@ fn run(cli: Cli) -> Result<()> {
                 } else {
                     None
                 });
-                let out = media::finalize_tracks(
+                let written = media::finalize_parts(
                     ffmpeg.as_deref(),
                     ffprobe.as_deref(),
-                    &report.paths.video,
-                    report.paths.audio.as_deref(),
-                    &report.paths.final_path,
+                    &report.paths.parts,
                     preset,
                     keep_source || job_config.keep_ts,
                     ctx,
                 )?;
-                ctx.message(format!("saved {}", out.display()));
+                ctx.message(format!("saved {} file(s)", written.len()));
                 if let Some(note) = &report.note {
                     eprintln!("\n  note: {note}");
                 }
