@@ -1,5 +1,20 @@
 {
   "version": "0.5.0",
-  "updated": "2026-11-15",
-  "artifacts": []
+  "updated": "2026-11-24",
+  "artifacts": [
+    {
+      "name": "chaturbate-recorder-0.5.0-arm64.dmg",
+      "label": "macOS (Apple Silicon)",
+      "url": "https://covers.debrid.in/chaturbate-recorder/releases/0.5.0/chaturbate-recorder-0.5.0-arm64.dmg",
+      "size": "4.6 MiB",
+      "sha256": "0399f6e96962d4d8d6ee429eda72cdfe4ac529896fb20d1d89a688fa657d768c"
+    },
+    {
+      "name": "chaturbate-recorder-cli-0.5.0-macos-arm64.tar.gz",
+      "label": "macOS (Apple Silicon, CLI)",
+      "url": "https://covers.debrid.in/chaturbate-recorder/releases/0.5.0/chaturbate-recorder-cli-0.5.0-macos-arm64.tar.gz",
+      "size": "1.7 MiB",
+      "sha256": "bbe630c448b2a78a7e91f399719556573f13399a2d40ca2e207727cff01099e6"
+    }
+  ]
 }
