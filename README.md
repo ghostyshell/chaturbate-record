@@ -20,8 +20,8 @@ Built with a Rust engine, Tauri 2 and React.
 <!-- downloads:start -->
 | Build | Download | Size |
 | --- | --- | --- |
-| `chaturbate-recorder-0.5.0-arm64.dmg` | [Download](https://covers.debrid.in/chaturbate-recorder/releases/0.5.0/chaturbate-recorder-0.5.0-arm64.dmg) | 4.6 MiB |
-| `chaturbate-recorder-cli-0.5.0-macos-arm64.tar.gz` | [Download](https://covers.debrid.in/chaturbate-recorder/releases/0.5.0/chaturbate-recorder-cli-0.5.0-macos-arm64.tar.gz) | 1.7 MiB |
+| `chaturbate-recorder-0.5.1-arm64.dmg` | [Download](https://covers.debrid.in/chaturbate-recorder/releases/0.5.1/chaturbate-recorder-0.5.1-arm64.dmg) | 4.6 MiB |
+| `chaturbate-recorder-cli-0.5.1-macos-arm64.tar.gz` | [Download](https://covers.debrid.in/chaturbate-recorder/releases/0.5.1/chaturbate-recorder-cli-0.5.1-macos-arm64.tar.gz) | 1.7 MiB |
 <!-- downloads:end -->
 
 The desktop builds are not notarized: right-click, Open, Open on first launch
